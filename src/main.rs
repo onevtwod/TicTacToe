@@ -1,11 +1,19 @@
-use std::io;
+use std::fs::File;
+use std::io::{self, Read};
 use rand::Rng;
+use serde::{Serialize, Deserialize};
+use serde_json;
+
+#[derive(Serialize, Deserialize)]
+struct GameState {
+    board: Vec<Vec<char>>,
+    move_stack: Vec<(usize, usize)>,
+    current_player: char,
+}
 
 fn main() {
     let mut move_stack: Vec<(usize, usize)> = Vec::new();
     let mut board: Vec<Vec<char>> = vec![vec![' '; 3]; 3];
-
-    // Starting Player
     let mut current_player: char = starting_player_randomizer();
 
     println!("{} player starts first!\n", &current_player);
@@ -24,12 +32,25 @@ fn main() {
 
         // Current Player
         println!("Current turn: {}", current_player);
+        println!("Please enter your command (e.g., '1 2' for move, 'undo', 'save', 'load', 'quit'): ");
 
         // Command
         let command = get_input();
         let clean_command: String = command.trim().to_lowercase();
         if clean_command == "undo" {
             undo_move(&mut move_stack, &mut board);
+        } else if clean_command == "save" {
+            save_game_state(&board, &move_stack, current_player).expect("Failed to save game state");
+            println!("Game Saved!");
+        } else if clean_command == "load" {
+            let state = load_game_state().expect("Failed to load game state");
+            println!("Game Loaded!");
+            board = state.board;
+            move_stack = state.move_stack;
+            current_player = state.current_player;
+        } else if clean_command == "quit" {
+            println!("Exiting the game. Goodbye!");
+            break;
         } else {
             match parse_move(&clean_command) {
                 Some((x, y)) => {
@@ -63,7 +84,6 @@ fn starting_player_randomizer() -> char {
 
 // Function: Getting input from terminal
 fn get_input() -> String {
-    print!("Please enter your command (e.g., '1 2' for move or 'undo'): ");
     let mut command = String::new();
     io::stdin()
         .read_line(&mut command)
@@ -164,4 +184,23 @@ fn switch_player(current_player: char) -> char {
         'O' => 'X',
         _ => unreachable!(), // This specific condition should never occur, and if it does, it will cause a panic.
     }
+}
+
+fn save_game_state(board: &Vec<Vec<char>>, move_stack: &Vec<(usize, usize)>, current_player: char) -> io::Result<()> {
+    let state = GameState {
+        board: board.clone(),
+        move_stack: move_stack.clone(),
+        current_player,
+    };
+    let file = File::create("game_state.json")?;
+    serde_json::to_writer(file, &state)?;
+    Ok(())
+}
+
+fn load_game_state() -> io::Result<GameState> {
+    let mut file = File::open("game_state.json")?;
+    let mut contents = String::new();
+    file.read_to_string(&mut contents)?;
+    let state: GameState = serde_json::from_str(&contents)?;
+    Ok(state)
 }
